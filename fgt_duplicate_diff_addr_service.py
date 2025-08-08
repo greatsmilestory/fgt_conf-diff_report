@@ -154,7 +154,13 @@ def highlight_differences_across_vdoms(values):
     DUPLICATE_COLORS = [
         "#ffff99", "#ccffcc", "#99ccff", "#ffcc99",
         "#ff99cc", "#ccccff", "#ffd699", "#c2f0c2",
-        "#b3e6ff", "#ffb3b3", "#d9b3ff", "#ffffb3"
+        "#b3e6ff", "#ffb3b3", "#d9b3ff", "#ffffb3",
+        "#66ff66", "#66ccff", "#ff6666", "#ffcc00",
+        "#9966ff", "#66ffff", "#ff9966", "#66ffcc",
+        "#ff66cc", "#99ff66", "#3399ff", "#ffcc66",
+        "#cc99ff", "#99ffff", "#ff9999", "#ccff66",
+        "#66b3ff", "#ff66ff", "#aaffaa", "#ffb366",
+        "#c299ff", "#99ffcc", "#ff6699", "#b3ff66"
     ]
     color_map = {}
     color_index = 0
