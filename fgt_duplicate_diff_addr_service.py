@@ -5,7 +5,8 @@ from tkinter import filedialog
 import webbrowser
 import os
 
-# GUI function to let the user select multiple FortiGate config files
+
+# GUI function to let user select multiple FortiGate config files
 def select_files():
     root = tk.Tk()
     root.withdraw()  # Hide the default Tkinter window
@@ -15,38 +16,41 @@ def select_files():
     )
     return list(file_paths)
 
-# Determine whether the config is a single VDOM (absence of "config vdom")
+
+# Check if "config vdom" string is not in config text to determine single VDOM
 def is_single_vdom(config_text):
     return "config vdom" not in config_text
 
-# Extract firewall-related objects from config blocks (address, addrgrp, etc.)
+
+# Extract firewall-related objects (address, addrgrp, etc.) from config block
 def extract_firewall_objects(text):
-    firewall_pattern = re.compile(r'(config firewall .+?)(?=config|end\s+config|\Z)', re.S)
-    object_pattern = re.compile(r'edit "(.+?)"(.*?)next', re.S)
-    set_pattern = re.compile(r'set (\S+) (.+)')
+    firewall_pattern = re.compile(r'(config firewall .+?)(?=config|end\s+config|\Z)', re.S)  # Extract each config firewall block
+    object_pattern = re.compile(r'edit "(.+?)"(.*?)next', re.S)  # Extract object name and content
+    set_pattern = re.compile(r'set (\S+) (.+)')  # Extract properties set by 'set' commands
 
     firewalls = {}
     for fw_block in firewall_pattern.findall(text):
-        fw_type = fw_block.split("\n")[0].strip()
+        fw_type = fw_block.split("\n")[0].strip()  # e.g., config firewall address
         objects = {}
         for obj_name, obj_content in object_pattern.findall(fw_block):
             props = {}
             for key, val in set_pattern.findall(obj_content):
                 if key.lower() in ["uuid", "associated-interface"]:
-                    continue
+                    continue  # Ignore specified properties
                 if key.lower() == "member":
                     items = re.findall(r'"([^"]*)"', val)
-                    val = " ".join(f'"{item}"' for item in sorted(items))
+                    val = " ".join(f'"{item}"' for item in sorted(items))  # Sort items into string
                 else:
                     val = val.strip('"')
                     if key.lower() == "comment":
-                        val = " ".join(val.split())
+                        val = " ".join(val.split())  # Remove multi-line comments and join into one line
                 props[key] = val
             objects[obj_name] = props
         firewalls[fw_type] = objects
     return firewalls
 
-# Parse config file and extract per-VDOM firewall objects
+
+# Extract objects per VDOM from config file
 def parse_config_file(file_path):
     with open(file_path, encoding="utf-8", errors="ignore") as f:
         config_text = f.read()
@@ -55,10 +59,10 @@ def parse_config_file(file_path):
     vdom_data = {}
 
     if is_single:
-        vdom_name = "root"
+        vdom_name = "root"  # Set VDOM name as "root" for single VDOM
         vdom_data[vdom_name] = extract_firewall_objects(config_text)
     else:
-        vdom_start_pattern = re.compile(r'edit (\S+)\s+config system object-tagging', re.S)
+        vdom_start_pattern = re.compile(r'edit (\S+)\s+config system object-tagging', re.S)  # Find VDOM sections
         matches = list(vdom_start_pattern.finditer(config_text))
 
         for idx, match in enumerate(matches):
@@ -70,7 +74,8 @@ def parse_config_file(file_path):
 
     return is_single, vdom_data
 
-# Color mapping per object type
+
+# Color mapping by object type (for HTML table distinction)
 OBJ_COLOR_MAP = {
     "config firewall address": "#e0f7fa",
     "config firewall addrgrp": "#fff3e0",
@@ -78,7 +83,7 @@ OBJ_COLOR_MAP = {
     "config firewall service group": "#f3e5f5"
 }
 
-# Order of object types for sorting
+# Priority order for comparison
 OBJ_TYPE_ORDER = [
     "config firewall address",
     "config firewall addrgrp",
@@ -86,17 +91,20 @@ OBJ_TYPE_ORDER = [
     "config firewall service group"
 ]
 
+
 # Compare objects across multiple files and VDOMs
 def compare_objects_across_files(file_vdom_map):
-    all_objects = {}
-    col_labels = []
+    all_objects = {}  # (fw_type, obj_name) => {label: props}
+    col_labels = []   # Table column names: filename + [VDOM]
 
+    # Create labels per file and VDOM
     for file_path, vdoms in file_vdom_map.items():
         file_label = os.path.basename(file_path)
         for vdom in vdoms.keys():
             label = f"{file_label}\n[{vdom}]"
             col_labels.append(label)
 
+    # Collect all objects
     for file_path, vdoms in file_vdom_map.items():
         file_label = os.path.basename(file_path)
         for vdom, fw_types in vdoms.items():
@@ -125,8 +133,11 @@ def compare_objects_across_files(file_vdom_map):
                     val = ""
                 values[label] = val
 
-            if len(values) < 2 or len(set(values.values())) <= 1:
-                continue
+            if len(values) < 2:
+                continue  # Less than two comparison targets
+            if len(set(values.values())) <= 1:
+                continue  # All values identical
+
             obj_diff[prop] = values
 
         if obj_diff:
@@ -134,7 +145,8 @@ def compare_objects_across_files(file_vdom_map):
 
     return all_objects, col_labels, diffs
 
-# Highlight differing values with background color
+
+# Highlight duplicate property values with colors; unique values in red
 def highlight_differences_across_vdoms(values):
     vdom_items = {}
     item_count = {}
@@ -151,6 +163,7 @@ def highlight_differences_across_vdoms(values):
             for item in items:
                 item_count[item] = item_count.get(item, 0) + 1
 
+    # Assign colors per item
     DUPLICATE_COLORS = [
         "#ffff99", "#ccffcc", "#99ccff", "#ffcc99",
         "#ff99cc", "#ccccff", "#ffd699", "#c2f0c2",
@@ -170,6 +183,9 @@ def highlight_differences_across_vdoms(values):
             color_index += 1
 
     highlighted_values = {}
+    # Include info of duplicate items in return value
+    duplicate_items = set(item for item, count in item_count.items() if count >= 2)
+
     for vdom, items in vdom_items.items():
         highlighted_parts = []
         for item in items:
@@ -177,10 +193,12 @@ def highlight_differences_across_vdoms(values):
                 highlighted_parts.append(f'<span style="background-color:{color_map[item]}">"{item}"</span>')
             else:
                 highlighted_parts.append(f'<span style="background-color:#ff6666">"{item}"</span>')
-        highlighted_values[vdom] = " ".join(highlighted_parts) if highlighted_parts else ""
-    return highlighted_values
+        highlighted_values[vdom] = "<br>".join(highlighted_parts) if highlighted_parts else ""
 
-# Generate HTML report
+    return highlighted_values, duplicate_items
+
+
+# Generate HTML report for comparison results
 def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt_duplicate_address_object.html"):
     colors = [
         "#1976D2", "#388E3C", "#FBC02D", "#F57C00",
@@ -202,12 +220,61 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
         fname = label.split("\n")[0]
         label_colors[label] = file_name_to_color.get(fname, "#ffffff")
 
+    # Set text color based on background for readability
     def get_contrast_color(bgcolor):
         bg = bgcolor.lstrip('#')
         r, g, b = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
         brightness = (r * 299 + g * 587 + b * 114) / 1000
         return "#000000" if brightness > 150 else "#ffffff"
 
+    # Mouse hover 3D highlight CSS and JS (applies only to duplicates)
+    extra_js = """
+    <style>
+    .hover-item {
+    cursor: pointer;
+    transition: all 0.3s ease;               /* Hover animation */
+    display: inline-block;
+    padding: 1px 3px;
+    border-radius: 3px;
+    }
+    .highlight-glow {                        /* Style on mouse hover */
+        text-shadow:
+            0 0 5px #ffeb3b,
+            0 0 10px #ffeb3b,
+            0 0 20px #ffeb3b,
+            0 0 30px #fbc02d,
+            0 0 40px #fbc02d;
+        font-weight: bold;
+        transform: scale(1.15);              /* Zoom effect on hover */
+        background-color: transparent;       /* No background, only border */
+        border: 1px solid #0000ff;           /* Border thickness and color */
+        border-radius: 4px;                  /* Rounded border corners */
+        padding: 1px 3px;
+        /* color: #ff0000; */                /* Font color */
+    }
+    </style>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const hoverItems = document.querySelectorAll(".hover-item");
+        hoverItems.forEach(item => {
+            item.addEventListener("mouseenter", () => {
+                const val = item.getAttribute("data-val");
+                const row = item.getAttribute("data-row");
+                hoverItems.forEach(i => {
+                    if (i.getAttribute("data-val") === val && i.getAttribute("data-row") === row) {
+                        i.classList.add("highlight-glow");
+                    }
+                });
+            });
+            item.addEventListener("mouseleave", () => {
+                hoverItems.forEach(i => i.classList.remove("highlight-glow"));
+            });
+        });
+    });
+    </script>
+    """
+
+    # Start HTML basic structure
     html_content = f"""
     <html><head><meta charset='UTF-8'>
     <style>
@@ -271,8 +338,8 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
     .rownum-even {{ background: #ffffff; }}
     </style>
     </head><body>
-    <h3>FortiGate Config VDOM Object Comparison (Duplicates Colored, Unique in Red)</h3>
-    <div id="legend-container"><strong>Column colors by file: </strong>
+    <h3>VDOM Object Comparison of FGT Config Files (Duplicate values colored by value, unique values in red)</h3>
+    <div id="legend-container"><strong>File-wise column color distinction: </strong>
     """
 
     for fname in file_names:
@@ -294,6 +361,7 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
         html_content += f'<th class="vdom-column" style="background-color:{bgcolor}; color:{textcolor}">{html.escape(vdom_name)}</th>'
     html_content += "</tr></thead><tbody>"
 
+    # Fill table contents
     row_num = 1
     for (fw_type, obj_name), prop_diffs in sorted(diffs.items(), key=lambda x: (
             OBJ_TYPE_ORDER.index(x[0][0]) if x[0][0] in OBJ_TYPE_ORDER else 999,
@@ -312,24 +380,54 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
                 html_content += f'<td class="objname" rowspan="{rowspan}">{html.escape(obj_name)}</td>'
             html_content += f'<td class="property">{html.escape(prop)}</td>'
 
-            highlighted_vals = highlight_differences_across_vdoms(values)
+            # ★ Calculate duplicate colors once per all column values (also get duplicate info)
+            highlighted_vals, duplicate_items = highlight_differences_across_vdoms(values)
+
+            # wrap hover-item span function (hover-item class only on duplicate values)
+            def wrap_hover_spans_with_color(text, rownum, duplicate_items):
+                span_pattern = re.compile(r'(<span style="background-color:[^"]+">"([^"]*)"</span>)')
+                result = []
+                idx = 0
+                for m in span_pattern.finditer(text):
+                    start, end = m.span()
+                    if start > idx:
+                        raw = text[idx:start]
+                        result.append(raw)
+                    full_span = m.group(1)
+                    val = m.group(2)
+                    # Add hover-item class only for duplicate values
+                    if val in duplicate_items:
+                        wrapped_span = f'<span class="hover-item" data-val="{html.escape(val)}" data-row="{rownum}">{full_span}</span>'
+                    else:
+                        wrapped_span = full_span
+                    result.append(wrapped_span)
+                    idx = end
+                if idx < len(text):
+                    result.append(text[idx:])
+                return "".join(result)
+
             for label in col_labels:
                 obj_props = all_objects.get((fw_type, obj_name), {}).get(label, None)
                 val = values.get(label, "")
                 if obj_props is None:
-                    cell_text = "Object Missing"
+                    cell_text = "Object missing"
                     cell_class = "missing-object"
                 elif val == "":
-                    cell_text = "No Value"
+                    cell_text = "No property value"
                     cell_class = "missing-value"
                 else:
-                    cell_text = highlighted_vals[label]
+                    colored_val = highlighted_vals.get(label, "")
+                    cell_text = wrap_hover_spans_with_color(colored_val, row_num, duplicate_items)
                     cell_class = ""
                 html_content += f'<td class="vdom-column {cell_class}">{cell_text}</td>'
             html_content += "</tr>"
         row_num += 1
 
-    html_content += "</tbody></table></body></html>"
+    html_content += "</tbody></table>"
+
+    html_content += extra_js
+
+    html_content += "</body></html>"
 
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -337,16 +435,17 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
     print(f"HTML report generated: {output_file}")
     webbrowser.open(output_file)
 
-# Main function
+
+# Main execution function: file selection → parsing → comparison → HTML report generation
 if __name__ == "__main__":
     file_paths = select_files()
 
     if not file_paths:
-        print("No file selected.")
+        print("No files selected.")
     elif len(file_paths) == 1:
         is_single, vdom_data = parse_config_file(file_paths[0])
         if is_single:
-            print("Nothing to compare (only one single-VDOM config selected).")
+            print("No content to compare (only one single VDOM config file selected).")
         else:
             file_vdom_map = {file_paths[0]: vdom_data}
             all_objects, col_labels, diffs = compare_objects_across_files(file_vdom_map)
