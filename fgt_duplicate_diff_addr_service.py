@@ -225,30 +225,43 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
         brightness = (r * 299 + g * 587 + b * 114) / 1000
         return "#000000" if brightness > 150 else "#ffffff"
 
-    # Mouse hover effect controlled by JS only
+    # Replaced with JS including mouse hover ON/OFF toggle logic
     extra_js = """
     <script>
     document.addEventListener("DOMContentLoaded", function() {
+        let hoverEnabled = true; // Default ON
+        const toggleBtn = document.getElementById("toggle-hover");
         const hoverItems = document.querySelectorAll(".hover-item");
+
+        function resetHoverStyles() {
+            hoverItems.forEach(i => {
+                i.style.transform = "";
+                i.style.textShadow = "";
+                i.style.fontWeight = "";
+                i.style.border = "";
+                i.style.borderRadius = "";
+                i.style.padding = "";
+            });
+        }
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener("click", function() {
+                hoverEnabled = !hoverEnabled;
+                this.textContent = "Hover: " + (hoverEnabled ? "ON" : "OFF");
+                if (!hoverEnabled) resetHoverStyles(); // Immediate initialization when OFF
+            });
+        }
+
+        // Existing hover action + toggle check
         hoverItems.forEach(item => {
             item.addEventListener("mouseenter", () => {
+                if (!hoverEnabled) return;
+
                 const val = item.getAttribute("data-val");
                 const row = item.getAttribute("data-row");
                 hoverItems.forEach(i => {
                     if (i.getAttribute("data-val") === val && i.getAttribute("data-row") === row) {
-                        // Controlling mouse hover styles with JS: zoom, text shadows, borders, etc.
-                        // i.style.display = "inline-block";
-                        // i.style.transition = "transform 0.3s ease";
-                        // i.style.backgroundColor = "transparent";
                         i.style.transform = "scale(1.15)";
-                        /*
-                         i.style.textShadow =
-                            "0 0 5px #ffeb3b," +
-                            "0 0 10px #ffeb3b," +
-                            "0 0 20px #ffeb3b," +
-                            "0 0 30px #fbc02d," +
-                            "0 0 40px #fbc02d";
-                        */
                         i.style.fontWeight = "bold";
                         i.style.border = "1px solid #0000ff";
                         i.style.borderRadius = "4px";
@@ -257,18 +270,7 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
                 });
             });
             item.addEventListener("mouseleave", () => {
-                hoverItems.forEach(i => {
-                    // Reset mouse hover style
-                    // i.style.display = "";
-                    // i.style.transition = "";
-                    // i.style.backgroundColor = "";
-                    i.style.transform = "";
-                    i.style.textShadow = "";
-                    i.style.fontWeight = "";
-                    i.style.border = "";
-                    i.style.borderRadius = "";
-                    i.style.padding = "";
-                });
+                resetHoverStyles();
             });
         });
     });
@@ -343,10 +345,20 @@ def generate_html_report(all_objects, col_labels, diffs, output_file="report_fgt
         <div id="legend-container"><strong>File column color legend: </strong>
         """
 
+    file_names = []
+    file_name_to_color = {}
+    for label in col_labels:
+        fname = label.split("\n")[0]
+        if fname not in file_names:
+            file_names.append(fname)
+    for i, fname in enumerate(file_names):
+        file_name_to_color[fname] = colors[i % len(colors)]
+
     for fname in file_names:
         color = file_name_to_color[fname]
         html_content += f'<span class="legend-item"><span class="color-box" style="background-color:{color};"></span><span>{html.escape(fname)}</span></span>'
-    html_content += "</div>"
+    # Added a toggle button to the right of the legend (default Hover: ON)
+    html_content += '<button id="toggle-hover" style="margin-left:10px;padding:4px 8px;font-size:12px;">Hover: ON</button></div>'
 
     html_content += "<table><thead><tr>"
     html_content += """
