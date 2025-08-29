@@ -1082,7 +1082,7 @@ th.vdom-column, td.vdom-column { width: 160px; min-width: 80px; }
 </style>
 </head>
 <body>
-<a href="https://github.com/smil2story" target="_blank" class="credit" rel="noopener noreferrer">Created by github.com/smil2story with AI-powered</a>
+<a href="https://github.com/smilestory-net" target="_blank" class="credit" rel="noopener noreferrer">Created by github.com/smilestory-net with AI-powered</a>
 
 <div class="container">
   <h3>FGT config files VDOM object comparison</h3>
